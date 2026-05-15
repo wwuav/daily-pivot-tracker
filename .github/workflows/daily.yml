@@ -2,9 +2,9 @@ name: Pivot Targets
 
 on:
   schedule:
-    - cron: "5 0 * * *"
-    - cron: "10 0 * * 1"
-    - cron: "15 0 1 * *"
+    - cron: "5 0 * * *"   # Runs at 00:05, daily
+    - cron: "10 0 * * 1"  # Runs at 00:10, only on Monday
+    - cron: "15 0 1 * *"  # Runs at 00:15, on day 1 of the month
   workflow_dispatch:
     inputs:
       timeframe:
@@ -32,6 +32,7 @@ jobs:
       - run: python pivot_script.py daily
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   weekly-pivots:
     if: >
@@ -47,6 +48,7 @@ jobs:
       - run: python pivot_script.py weekly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   monthly-pivots:
     if: >
@@ -62,3 +64,4 @@ jobs:
       - run: python pivot_script.py monthly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
