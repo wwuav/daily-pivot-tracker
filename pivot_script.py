@@ -10,7 +10,7 @@ CG_COINS = [
     {"id": "bitcoin",  "label": "BTC"},
     {"id": "ethereum", "label": "ETH"},
     {"id": "sui",      "label": "SUI"},
-    {"id": "solana",   "label": "SOL"},
+    {"id": "solana",   "label": "SOL"},h
     {"id": "monero",   "label": "XMR"},
 ]
 
@@ -206,7 +206,7 @@ def run(timeframe):
         raise ValueError("Unknown timeframe: " + timeframe)
     tf_label = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly"}[timeframe]
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    send(f"--- {tf_label} Pivot Targets | {now} ---")
+    send(f"--- {tf_label} Targets | {now} ---")
 
     for coin in CG_COINS:
         try:
