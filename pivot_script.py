@@ -34,7 +34,7 @@ def get_cg_closed_candle(coin_id, timeframe):
         data = get_cg_ohlc(coin_id, 90)
         if not data:
             return None
-        candle = data[-2]
+        candle = data[-1]
         return {"open": candle[1], "high": candle[2], "low": candle[3], "close": candle[4]}
 
     elif timeframe == "weekly":
