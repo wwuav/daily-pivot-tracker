@@ -6,13 +6,13 @@ from datetime import datetime, timezone, timedelta
 DISCORD_WEBHOOK_BTC  = os.environ["DISCORD_WEBHOOK_BTC"]
 DISCORD_WEBHOOK_ALTS = os.environ["DISCORD_WEBHOOK"]
 
-# Binance symbols -> display labels
-BN_COINS = [
-    {"symbol": "BTCUSDT", "label": "BTC", "webhook": DISCORD_WEBHOOK_BTC},
-    {"symbol": "ETHUSDT", "label": "ETH", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"symbol": "SUIUSDT", "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"symbol": "SOLUSDT", "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"symbol": "XMRUSDT", "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
+# Kraken pairs -> display labels
+KR_COINS = [
+    {"pair": "XBTUSD", "label": "BTC", "webhook": DISCORD_WEBHOOK_BTC},
+    {"pair": "ETHUSD", "label": "ETH", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "SUIUSD", "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "SOLUSD", "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "XMRUSD", "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # DEX coins via GeckoTerminal
@@ -21,28 +21,84 @@ GT_COINS = [
 ]
 
 
-def get_binance_klines(symbol, interval, limit=10):
-    url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": symbol, "interval": interval, "limit": limit}
+def get_kraken_daily(pair):
+    """Fetch daily OHLC from Kraken. Returns list of [ts, o, h, l, c, vwap, vol, cnt]."""
+    url = "https://api.kraken.com/0/public/OHLC"
+    params = {"pair": pair, "interval": 1440}
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
-    return r.json()
+    body = r.json()
+    if body.get("error"):
+        raise Exception(f"Kraken error: {body['error']}")
+    result = body.get("result", {})
+    for k, v in result.items():
+        if k == "last":
+            continue
+        if isinstance(v, list):
+            return v
+    return []
 
 
-def get_bn_closed_candle(symbol, timeframe):
-    interval_map = {"daily": "1d", "weekly": "1w", "monthly": "1M"}
-    interval = interval_map[timeframe]
-    data = get_binance_klines(symbol, interval, limit=5)
-    if not data or len(data) < 2:
-        return None
-    # Last entry is the still-forming candle; take the previous (just-closed) one
-    candle = data[-2]
+def _row_ohlc(row):
     return {
-        "open":  float(candle[1]),
-        "high":  float(candle[2]),
-        "low":   float(candle[3]),
-        "close": float(candle[4]),
+        "open":  float(row[1]),
+        "high":  float(row[2]),
+        "low":   float(row[3]),
+        "close": float(row[4]),
     }
+
+
+def get_kr_closed_candle(pair, timeframe):
+    now_utc = datetime.now(timezone.utc)
+    rows = get_kraken_daily(pair)
+    if not rows or len(rows) < 2:
+        return None
+
+    if timeframe == "daily":
+        return _row_ohlc(rows[-2])
+
+    elif timeframe == "weekly":
+        today = now_utc.date()
+        start_of_this_week = today - timedelta(days=today.weekday())
+        end_of_last_week   = start_of_this_week - timedelta(days=1)
+        start_of_last_week = start_of_this_week - timedelta(days=7)
+
+        week_rows = [
+            r for r in rows
+            if start_of_last_week
+               <= datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date()
+               <= end_of_last_week
+        ]
+        if not week_rows:
+            return None
+        o  = float(week_rows[0][1])
+        h  = max(float(r[2]) for r in week_rows)
+        l  = min(float(r[3]) for r in week_rows)
+        cl = float(week_rows[-1][4])
+        return {"open": o, "high": h, "low": l, "close": cl}
+
+    else:  # monthly
+        today = now_utc.date()
+        if today.month == 1:
+            prev_month, prev_year = 12, today.year - 1
+        else:
+            prev_month, prev_year = today.month - 1, today.year
+
+        month_rows = [
+            r for r in rows
+            if (
+                datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date().month == prev_month
+                and
+                datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date().year  == prev_year
+            )
+        ]
+        if not month_rows:
+            return None
+        o  = float(month_rows[0][1])
+        h  = max(float(r[2]) for r in month_rows)
+        l  = min(float(r[3]) for r in month_rows)
+        cl = float(month_rows[-1][4])
+        return {"open": o, "high": h, "low": l, "close": cl}
 
 
 def get_gt_daily_candles(network, pool, limit=90):
@@ -188,14 +244,12 @@ def run(timeframe):
     tf_label = tf_label_map.get(timeframe, timeframe.capitalize())
     header_msg = f"--- {tf_label} Targets | {now} ---"
 
-    # Send header to both channels
     send(DISCORD_WEBHOOK_BTC,  header_msg)
     send(DISCORD_WEBHOOK_ALTS, header_msg)
 
-    # Binance coins
-    for coin in BN_COINS:
+    for coin in KR_COINS:
         try:
-            ohlc = get_bn_closed_candle(coin["symbol"], timeframe)
+            ohlc = get_kr_closed_candle(coin["pair"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
@@ -204,7 +258,6 @@ def run(timeframe):
         except Exception as e:
             send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
-    # GeckoTerminal coins
     for coin in GT_COINS:
         try:
             ohlc = get_gt_closed_candle(coin["network"], coin["pool"], timeframe)
