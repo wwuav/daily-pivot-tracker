@@ -2,7 +2,7 @@ name: Pivot Targets
 
 on:
   schedule:
-    - cron: "5 0 * * *"   # Runs at 00:05, daily
+    - cron: "0 1 * * *"   # Runs at 00:05, daily
     - cron: "10 0 * * 1"  # Runs at 00:10, only on Monday
     - cron: "15 0 1 * *"  # Runs at 00:15, on day 1 of the month
   workflow_dispatch:
@@ -21,7 +21,7 @@ jobs:
   daily-pivots:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
-      github.event_name == 'schedule' && github.event.schedule == '5 0 * * *'
+      github.event_name == 'schedule' && github.event.schedule == '0 1 * * *'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
