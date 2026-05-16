@@ -6,13 +6,13 @@ from datetime import datetime, timezone, timedelta
 DISCORD_WEBHOOK_BTC  = os.environ["DISCORD_WEBHOOK_BTC"]
 DISCORD_WEBHOOK_ALTS = os.environ["DISCORD_WEBHOOK"]
 
-# CoinGecko coin IDs -> display labels
-CG_COINS = [
-    {"id": "bitcoin",  "label": "BTC",  "webhook": DISCORD_WEBHOOK_BTC},
-    {"id": "ethereum", "label": "ETH",  "webhook": DISCORD_WEBHOOK_ALTS},
-    {"id": "sui",      "label": "SUI",  "webhook": DISCORD_WEBHOOK_ALTS},
-    {"id": "solana",   "label": "SOL",  "webhook": DISCORD_WEBHOOK_ALTS},
-    {"id": "monero",   "label": "XMR",  "webhook": DISCORD_WEBHOOK_ALTS},
+# Binance symbols -> display labels
+BN_COINS = [
+    {"symbol": "BTCUSDT", "label": "BTC", "webhook": DISCORD_WEBHOOK_BTC},
+    {"symbol": "ETHUSDT", "label": "ETH", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"symbol": "SUIUSDT", "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"symbol": "SOLUSDT", "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"symbol": "XMRUSDT", "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # DEX coins via GeckoTerminal
@@ -20,77 +20,29 @@ GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
-def get_cg_ohlc(coin_id, days):
-    url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
-    params = {"vs_currency": "usd", "days": days}
+
+def get_binance_klines(symbol, interval, limit=10):
+    url = "https://api.binance.com/api/v3/klines"
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
     return r.json()
 
-def get_cg_closed_candle(coin_id, timeframe):
-    now_utc = datetime.now(timezone.utc)
 
-    if timeframe == "daily":
-        data = get_cg_ohlc(coin_id, 90)
-        if not data:
-            return None
-        candle = data[-1]
-        return {"open": candle[1], "high": candle[2], "low": candle[3], "close": candle[4]}
-
-    elif timeframe == "weekly":
-        data = get_cg_ohlc(coin_id, 90)
-        if not data:
-            return None
-        today = now_utc.date()
-        start_of_this_week = today - timedelta(days=today.weekday())
-        end_of_last_week   = start_of_this_week - timedelta(days=1)
-        start_of_last_week = start_of_this_week - timedelta(days=7)
-
-        week_candles = [
-            c for c in data
-            if start_of_last_week
-               <= datetime.fromtimestamp(c[0] / 1000, tz=timezone.utc).date()
-               <= end_of_last_week
-        ]
-        if not week_candles:
-            week_candles = data[-8:-1] if len(data) >= 8 else data[:-1]
-        if not week_candles:
-            week_candles = [data[-1]]
-
-        o  = week_candles[0][1]
-        h  = max(c[2] for c in week_candles)
-        l  = min(c[3] for c in week_candles)
-        cl = week_candles[-1][4]
-        return {"open": o, "high": h, "low": l, "close": cl}
-
-    else:  # monthly
-        data = get_cg_ohlc(coin_id, 365)
-        if not data:
-            return None
-        today = now_utc.date()
-        if today.month == 1:
-            prev_month, prev_year = 12, today.year - 1
-        else:
-            prev_month, prev_year = today.month - 1, today.year
-
-        month_candles = [
-            c for c in data
-            if (
-                datetime.fromtimestamp(c[0] / 1000, tz=timezone.utc).date().month == prev_month
-                and
-                datetime.fromtimestamp(c[0] / 1000, tz=timezone.utc).date().year  == prev_year
-            )
-        ]
-        if not month_candles:
-            month_candles = data[-32:-1] if len(data) >= 32 else data[:-1]
-        if not month_candles:
-            month_candles = [data[-1]]
-
-        o  = month_candles[0][1]
-        h  = max(c[2] for c in month_candles)
-        l  = min(c[3] for c in month_candles)
-        cl = month_candles[-1][4]
-        return {"open": o, "high": h, "low": l, "close": cl}
+def get_bn_closed_candle(symbol, timeframe):
+    interval_map = {"daily": "1d", "weekly": "1w", "monthly": "1M"}
+    interval = interval_map[timeframe]
+    data = get_binance_klines(symbol, interval, limit=5)
+    if not data or len(data) < 2:
+        return None
+    # Last entry is the still-forming candle; take the previous (just-closed) one
+    candle = data[-2]
+    return {
+        "open":  float(candle[1]),
+        "high":  float(candle[2]),
+        "low":   float(candle[3]),
+        "close": float(candle[4]),
+    }
 
 
 def get_gt_daily_candles(network, pool, limit=90):
@@ -240,10 +192,10 @@ def run(timeframe):
     send(DISCORD_WEBHOOK_BTC,  header_msg)
     send(DISCORD_WEBHOOK_ALTS, header_msg)
 
-    # CoinGecko coins — each goes to its own webhook
-    for coin in CG_COINS:
+    # Binance coins
+    for coin in BN_COINS:
         try:
-            ohlc = get_cg_closed_candle(coin["id"], timeframe)
+            ohlc = get_bn_closed_candle(coin["symbol"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
