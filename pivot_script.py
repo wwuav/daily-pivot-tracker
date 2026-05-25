@@ -235,8 +235,7 @@ def build_message(label, tf_label, ohlc):
     header = f"{label} {tf_label} Target is {fmt(pivots['P'])}"
     res_lines = "\n".join(f"{lbl:<4}  {fmt(price)}" for lbl, price in pivots["resistances"])
     sup_lines = "\n".join(f"{lbl:<4}  {fmt(price)}" for lbl, price in pivots["supports"])
-    return header + "\n\n" + res_lines + "\n\n" + sup_lines
-
+    return f"{header}\n```\n{res_lines}\n\n{sup_lines}\n```"
 
 def run(timeframe):
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
