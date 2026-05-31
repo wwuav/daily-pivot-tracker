@@ -2,66 +2,66 @@ name: Pivot Targets
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # Runs at 00:05, daily
-    - cron: "0 0 * * 1"  # Runs at 00:10, only on Monday
-    - cron: "0 0 1 * *"  # Runs at 00:15, on day 1 of the month
-  workflow_dispatch:
-    inputs:
-      timeframe:
-        description: "Timeframe (daily / weekly / monthly)"
-        required: true
-        default: "daily"
-        type: choice
-        options:
-          - daily
-          - weekly
-          - monthly
+      - cron: "0 1 * * *"   # Daily at 01:00 UTC = 8 PM EST (Asia open / daily candle close)
+          - cron: "0 1 * * 1"   # Weekly on Monday at 01:00 UTC = Sunday 8 PM EST (weekly candle close)
+              - cron: "0 1 1 * *"   # Monthly on 1st at 01:00 UTC = last day of month 8 PM EST (monthly candle close)
+                workflow_dispatch:
+                    inputs:
+                          timeframe:
+                                  description: "Timeframe (daily / weekly / monthly)"
+                                          required: true
+                                                  default: "daily"
+                                                          type: choice
+                                                                  options:
+                                                                            - daily
+                                                                                      - weekly
+                                                                                                - monthly
 
-jobs:
-  daily-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 * * *'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install requests
-      - run: python pivot_script.py daily
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
-
-  weekly-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 * * 1'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install requests
-      - run: python pivot_script.py weekly
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
-
-  monthly-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 1 * *'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install requests
-      - run: python pivot_script.py monthly
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+                                                                                                jobs:
+                                                                                                  daily-pivots:
+                                                                                                      if: >
+                                                                                                            github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
+                                                                                                                  github.event_name == 'schedule' && github.event.schedule == '0 1 * * *'
+                                                                                                                      runs-on: ubuntu-latest
+                                                                                                                          steps:
+                                                                                                                                - uses: actions/checkout@v4
+                                                                                                                                      - uses: actions/setup-python@v5
+                                                                                                                                              with:
+                                                                                                                                                        python-version: "3.11"
+                                                                                                                                                              - run: pip install requests
+                                                                                                                                                                    - run: python pivot_script.py daily
+                                                                                                                                                                            env:
+                                                                                                                                                                                      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+                                                                                                                                                                                                DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+                                                                                                                                                                                                
+                                                                                                                                                                                                  weekly-pivots:
+                                                                                                                                                                                                      if: >
+                                                                                                                                                                                                            github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly' ||
+                                                                                                                                                                                                                  github.event_name == 'schedule' && github.event.schedule == '0 1 * * 1'
+                                                                                                                                                                                                                      runs-on: ubuntu-latest
+                                                                                                                                                                                                                          steps:
+                                                                                                                                                                                                                                - uses: actions/checkout@v4
+                                                                                                                                                                                                                                      - uses: actions/setup-python@v5
+                                                                                                                                                                                                                                              with:
+                                                                                                                                                                                                                                                        python-version: "3.11"
+                                                                                                                                                                                                                                                              - run: pip install requests
+                                                                                                                                                                                                                                                                    - run: python pivot_script.py weekly
+                                                                                                                                                                                                                                                                            env:
+                                                                                                                                                                                                                                                                                      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+                                                                                                                                                                                                                                                                                                DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+                                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                                  monthly-pivots:
+                                                                                                                                                                                                                                                                                                      if: >
+                                                                                                                                                                                                                                                                                                            github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly' ||
+                                                                                                                                                                                                                                                                                                                  github.event_name == 'schedule' && github.event.schedule == '0 1 1 * *'
+                                                                                                                                                                                                                                                                                                                      runs-on: ubuntu-latest
+                                                                                                                                                                                                                                                                                                                          steps:
+                                                                                                                                                                                                                                                                                                                                - uses: actions/checkout@v4
+                                                                                                                                                                                                                                                                                                                                      - uses: actions/setup-python@v5
+                                                                                                                                                                                                                                                                                                                                              with:
+                                                                                                                                                                                                                                                                                                                                                        python-version: "3.11"
+                                                                                                                                                                                                                                                                                                                                                              - run: pip install requests
+                                                                                                                                                                                                                                                                                                                                                                    - run: python pivot_script.py monthly
+                                                                                                                                                                                                                                                                                                                                                                            env:
+                                                                                                                                                                                                                                                                                                                                                                                      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+                                                                                                                                                                                                                                                                                                                                                                                                DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
