@@ -38,7 +38,6 @@ def get_kraken_daily(pair):
             return v
     return []
 
-
 def _row_ohlc(row):
     return {
         "open":  float(row[1]),
@@ -47,7 +46,6 @@ def _row_ohlc(row):
         "close": float(row[4]),
     }
 
-
 def get_kr_closed_candle(pair, timeframe):
     now_utc = datetime.now(timezone.utc)
     rows = get_kraken_daily(pair)
@@ -55,9 +53,13 @@ def get_kr_closed_candle(pair, timeframe):
         return None
 
     if timeframe == "daily":
-        return _row_ohlc(rows[-2])
+        # Script runs at candle close (01:00 UTC = 8 PM EST).
+        # Kraken's last row is the candle that JUST closed — use rows[-1].
+        return _row_ohlc(rows[-1])
 
     elif timeframe == "weekly":
+        # Script runs Monday 01:00 UTC = Sunday 8 PM EST (weekly candle close).
+        # now_utc is Monday; weekday() == 0 → start_of_this_week is today (Monday).
         today = now_utc.date()
         start_of_this_week = today - timedelta(days=today.weekday())
         end_of_last_week   = start_of_this_week - timedelta(days=1)
@@ -66,8 +68,8 @@ def get_kr_closed_candle(pair, timeframe):
         week_rows = [
             r for r in rows
             if start_of_last_week
-               <= datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date()
-               <= end_of_last_week
+            <= datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date()
+            <= end_of_last_week
         ]
         if not week_rows:
             return None
@@ -78,6 +80,8 @@ def get_kr_closed_candle(pair, timeframe):
         return {"open": o, "high": h, "low": l, "close": cl}
 
     else:  # monthly
+        # Script runs on the 1st at 01:00 UTC = last day of previous month 8 PM EST.
+        # now_utc.month is the NEW month, so prev_month is the one that just closed.
         today = now_utc.date()
         if today.month == 1:
             prev_month, prev_year = 12, today.year - 1
@@ -100,7 +104,6 @@ def get_kr_closed_candle(pair, timeframe):
         cl = float(month_rows[-1][4])
         return {"open": o, "high": h, "low": l, "close": cl}
 
-
 def get_gt_daily_candles(network, pool, limit=90):
     url = f"https://api.geckoterminal.com/api/v2/networks/{network}/pools/{pool}/ohlcv/day"
     params = {"limit": limit, "currency": "usd"}
@@ -109,15 +112,16 @@ def get_gt_daily_candles(network, pool, limit=90):
     data = r.json()
     return data.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
 
-
 def get_gt_closed_candle(network, pool, timeframe):
     now_utc = datetime.now(timezone.utc)
 
     if timeframe == "daily":
         candles = get_gt_daily_candles(network, pool, limit=2)
-        if len(candles) < 2:
+        if not candles:
             return None
-        c = candles[1]
+        # GeckoTerminal returns newest-first. Script runs at candle close,
+        # so candles[0] is the candle that JUST closed — use index 0.
+        c = candles[0]
         return {"open": c[1], "high": c[2], "low": c[3], "close": c[4]}
 
     elif timeframe == "weekly":
@@ -131,15 +135,14 @@ def get_gt_closed_candle(network, pool, timeframe):
 
         week_candles = [
             c for c in candles
-            if start_of_last_week
-               <= datetime.fromtimestamp(c[0], tz=timezone.utc).date()
-               <= end_of_last_week
+            if (
+                start_of_last_week
+                <= datetime.fromtimestamp(c[0], tz=timezone.utc).date()
+                <= end_of_last_week
+            )
         ]
         if not week_candles:
-            week_candles = candles[1:8] if len(candles) >= 8 else candles[1:]
-        if not week_candles:
-            week_candles = [candles[0]]
-
+            return None
         o  = week_candles[-1][1]
         h  = max(c[2] for c in week_candles)
         l  = min(c[3] for c in week_candles)
@@ -177,9 +180,7 @@ def get_gt_closed_candle(network, pool, timeframe):
 
 
 def fmt(price):
-    if price >= 100:
-        return f"{price:,.0f}"
-    elif price >= 1:
+    if price >= 1:
         return f"{price:,.2f}"
     else:
         return f"{price:,.4f}"
@@ -232,12 +233,35 @@ def send(webhook, msg):
 def build_message(label, tf_label, ohlc):
     o, h, l, c = ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]
     pivots = calc_pivots(o, h, l, c)
-    header = f"{label} {tf_label} Target is {fmt(pivots['P'])}"
-    res_lines = "\n".join(f"{lbl:<4}  {fmt(price)}" for lbl, price in pivots["resistances"])
-    sup_lines = "\n".join(f"{lbl:<4}  {fmt(price)}" for lbl, price in pivots["supports"])
-    return f"{header}\n```\n{res_lines}\n\n{sup_lines}\n```"
+    P = pivots["P"]
 
-def run(timeframe):
+    lines = [
+        f"O: {fmt(o)}  H: {fmt(h)}  L: {fmt(l)}  C: {fmt(c)}",
+        f"Pivot: {fmt(P)}",
+        "",
+        "Resistances (low → high):",
+    ]
+    for name, val in pivots["resistances"]:
+        lines.append(f"  {name}: {fmt(val)}")
+    lines.append("")
+    lines.append("Supports (high → low):")
+    for name, val in pivots["supports"]:
+        lines.append(f"  {name}: {fmt(val)}")
+
+    body = "\n".join(lines)
+    return f"**{label} | {tf_label} Pivots**\n```\n{body}\n```"
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python pivot_script.py [daily|weekly|monthly]")
+        sys.exit(1)
+
+    timeframe = sys.argv[1].lower()
+    if timeframe not in ("daily", "weekly", "monthly"):
+        print(f"Unknown timeframe: {timeframe}")
+        sys.exit(1)
+
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     tf_label_map = {"daily": "Daily", "weekly": "Weekly", "monthly": "Monthly"}
     tf_label = tf_label_map.get(timeframe, timeframe.capitalize())
@@ -270,7 +294,4 @@ def run(timeframe):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2 or sys.argv[1] not in ("daily", "weekly", "monthly"):
-        print("Usage: python pivot_script.py [daily|weekly|monthly]")
-        sys.exit(1)
-    run(sys.argv[1])
+    main()
