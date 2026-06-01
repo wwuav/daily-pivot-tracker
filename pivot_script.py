@@ -235,21 +235,14 @@ def build_message(label, tf_label, ohlc):
     pivots = calc_pivots(o, h, l, c)
     P = pivots["P"]
 
-    lines = [
-        f"O: {fmt(o)}  H: {fmt(h)}  L: {fmt(l)}  C: {fmt(c)}",
-        f"Pivot: {fmt(P)}",
-        "",
-        "Resistances (low → high):",
-    ]
+    lines = [f"{label} {tf_label} Target is {fmt(P)}", ""]
     for name, val in pivots["resistances"]:
-        lines.append(f"  {name}: {fmt(val)}")
+        lines.append(f"{name}    {fmt(val)}")
     lines.append("")
-    lines.append("Supports (high → low):")
     for name, val in pivots["supports"]:
-        lines.append(f"  {name}: {fmt(val)}")
+        lines.append(f"{name}    {fmt(val)}")
 
-    body = "\n".join(lines)
-    return f"**{label} | {tf_label} Pivots**\n```\n{body}\n```"
+    return "\n".join(lines)
 
 
 def main():
