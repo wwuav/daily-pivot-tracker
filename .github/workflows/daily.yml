@@ -2,9 +2,9 @@ name: Pivot Targets
 
 on:
   schedule:
-    - cron: "0 1 * * *"  # Daily at 01:00 UTC = 8 PM EST (Asia open / daily candle close)
-    - cron: "0 1 * * 1"  # Weekly on Monday at 01:00 UTC = Sunday 8 PM EST (weekly candle close)
-    - cron: "0 1 1 * *"  # Monthly on 1st at 01:00 UTC = last day of month 8 PM EST (monthly candle close)
+    - cron: "0 0 * * *"  # Daily at 00:00 UTC = 7 PM EST (fires ~8 PM EST accounting for GitHub delay)
+    - cron: "0 0 * * 1"  # Weekly on Monday at 00:00 UTC = Sunday ~8 PM EST (weekly candle close)
+    - cron: "0 0 1 * *"  # Monthly on 1st at 00:00 UTC = last day of month ~8 PM EST (monthly candle close)
   workflow_dispatch:
     inputs:
       timeframe:
@@ -21,7 +21,7 @@ jobs:
   daily-pivots:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 1 * * *'
+      github.event_name == 'schedule' && github.event.schedule == '0 0 * * *'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
   weekly-pivots:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 1 * * 1'
+      github.event_name == 'schedule' && github.event.schedule == '0 0 * * 1'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +53,7 @@ jobs:
   monthly-pivots:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 1 1 * *'
+      github.event_name == 'schedule' && github.event.schedule == '0 0 1 * *'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
