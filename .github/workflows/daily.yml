@@ -2,9 +2,9 @@ name: Pivot Targets
 
 on:
   schedule:
-    - cron: "0 0 * * *"  # Daily at 00:00 UTC = 7 PM EST (fires ~8 PM EST accounting for GitHub delay)
-    - cron: "0 0 * * 1"  # Weekly on Monday at 00:00 UTC = Sunday ~8 PM EST (weekly candle close)
-    - cron: "0 0 1 * *"  # Monthly on 1st at 00:00 UTC = last day of month ~8 PM EST (monthly candle close)
+    - cron: "0 0 * * 2,3,4,5,6,0"  # Daily (Tue-Sun) at 00:00 UTC - skips Monday (weekly candle close)
+    - cron: "0 0 * * 1"             # Weekly on Monday at 00:00 UTC = Sunday ~8 PM EST (weekly candle close)
+    - cron: "0 0 1 * *"             # Monthly on 1st at 00:00 UTC = last day of month ~8 PM EST (monthly candle close)
   workflow_dispatch:
     inputs:
       timeframe:
@@ -21,9 +21,16 @@ jobs:
   daily-pivots:
     if: >
       github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 * * *'
+      github.event_name == 'schedule' && github.event.schedule == '0 0 * * 2,3,4,5,6,0'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip if 1st of the month (monthly candle closes today)
+        run: |
+          DAY=$(date -u +%d)
+          if [ "$DAY" = "01" ]; then
+            echo "Today is the 1st - skipping daily post to avoid duplicate with monthly job."
+            exit 0
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
