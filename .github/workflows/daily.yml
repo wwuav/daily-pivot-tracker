@@ -24,19 +24,31 @@ jobs:
       github.event_name == 'schedule' && github.event.schedule == '0 0 * * 2,3,4,5,6,0'
     runs-on: ubuntu-latest
     steps:
-      - name: Skip if 1st of the month (monthly candle closes today)
+      - name: Check if today is 1st of the month (skip - monthly job handles today)
+        id: date_check
         run: |
           DAY=$(date -u +%d)
           if [ "$DAY" = "01" ]; then
-            echo "Today is the 1st - skipping daily post to avoid duplicate with monthly job."
-            exit 0
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "Today is the 1st - skipping daily post (monthly job handles this candle)."
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
           fi
+      - name: Exit early if 1st of the month
+        if: steps.date_check.outputs.skip == 'true'
+        run: |
+          echo "Skipping daily post on the 1st of the month."
+          exit 0
       - uses: actions/checkout@v4
+        if: steps.date_check.outputs.skip != 'true'
       - uses: actions/setup-python@v5
+        if: steps.date_check.outputs.skip != 'true'
         with:
           python-version: "3.11"
       - run: pip install requests
+        if: steps.date_check.outputs.skip != 'true'
       - run: python pivot_script.py daily
+        if: steps.date_check.outputs.skip != 'true'
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
