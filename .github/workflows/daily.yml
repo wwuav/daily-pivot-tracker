@@ -15,8 +15,8 @@ on:
 
 jobs:
   daily-pivots:
-        if: inputs.timeframe == 'daily'
-        runs-on: ubuntu-latest
+    if: inputs.timeframe == 'daily'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
