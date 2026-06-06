@@ -1,10 +1,6 @@
 name: Pivot Targets
 
 on:
-  schedule:
-    - cron: "0 0 * * *"  # Daily at 00:00 UTC = 7 PM EST (fires ~8 PM EST accounting for GitHub delay)
-    - cron: "0 0 * * 1"  # Weekly on Monday at 00:00 UTC = Sunday ~8 PM EST (weekly candle close)
-    - cron: "0 0 1 * *"  # Monthly on 1st at 00:00 UTC = last day of month ~8 PM EST (monthly candle close)
   workflow_dispatch:
     inputs:
       timeframe:
@@ -19,10 +15,8 @@ on:
 
 jobs:
   daily-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 * * *'
-    runs-on: ubuntu-latest
+        if: inputs.timeframe == 'daily'
+        runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,9 +29,7 @@ jobs:
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   weekly-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 * * 1'
+    if: inputs.timeframe == 'weekly'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,9 +43,7 @@ jobs:
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   monthly-pivots:
-    if: >
-      github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly' ||
-      github.event_name == 'schedule' && github.event.schedule == '0 0 1 * *'
+    if: inputs.timeframe == 'monthly'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
