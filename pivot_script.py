@@ -18,6 +18,7 @@ KRAKEN_COINS = [
 # DEX coins via GeckoTerminal
 GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
+        {"network": "solana", "pool": "DVa7Qmb5ct9RCpaU7UTpSaf3GVMYz17vNVU67alt9mtA", "label": "RAY", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
