@@ -10,7 +10,7 @@ DISCORD_WEBHOOK_ALTS = os.environ["DISCORD_WEBHOOK"]
 KRAKEN_COINS = [
     {"pair": "XBTUSDT",  "label": "BTC", "webhook": DISCORD_WEBHOOK_BTC},
     {"pair": "ETHUSDT",  "label": "ETH", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"pair": "SUIUSDT",  "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "SUIUSD",  "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SOLUSDT",  "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "XMRUSDT",  "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
