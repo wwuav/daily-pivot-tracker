@@ -20,16 +20,16 @@ GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
-# Binance spot pairs (for coins not on Kraken)
-BINANCE_COINS = [
+# Bybit spot pairs (for coins not on Kraken)
+BYBIT_COINS = [
     {"pair": "HYPEUSDT", "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
-def get_kraken_daily(pair):
-    """Fetch daily OHLC from Kraken. Returns list of [ts, o, h, l, c, vwap, vol, cnt]."""
+def get_kraken_ohlc(pair, interval=1440):
+    """Fetch OHLC from Kraken for given interval (minutes). Returns list of [ts, o, h, l, c, vwap, vol, cnt]."""
     url = "https://api.kraken.com/0/public/OHLC"
-    params = {"pair": pair, "interval": 1440}
+    params = {"pair": pair, "interval": interval}
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
     body = r.json()
@@ -46,7 +46,7 @@ def get_kraken_daily(pair):
 
 def get_kraken_closed_candle(pair, timeframe):
     now_utc = datetime.now(timezone.utc)
-    rows = get_kraken_daily(pair)
+    rows = get_kraken_ohlc(pair)
     if not rows or len(rows) < 2:
         return None
 
@@ -62,24 +62,18 @@ def get_kraken_closed_candle(pair, timeframe):
         }
 
     elif timeframe == "weekly":
-        today = now_utc.date()
-        start_of_this_week = today - timedelta(days=today.weekday())
-        end_of_last_week   = start_of_this_week - timedelta(days=1)
-        start_of_last_week = start_of_this_week - timedelta(days=7)
-
-        week_rows = [
-            r for r in rows
-            if start_of_last_week
-            <= datetime.fromtimestamp(int(r[0]), tz=timezone.utc).date()
-            <= end_of_last_week
-        ]
-        if not week_rows:
+        # Use Kraken's native weekly candles (interval=10080 min) for accuracy
+        rows_weekly = get_kraken_ohlc(pair, 10080)
+        if not rows_weekly or len(rows_weekly) < 2:
             return None
-        o  = float(week_rows[0][1])
-        h  = max(float(r[2]) for r in week_rows)
-        l  = min(float(r[3]) for r in week_rows)
-        cl = float(week_rows[-1][4])
-        return {"open": o, "high": h, "low": l, "close": cl}
+        # rows_weekly[-2] = last fully closed weekly candle
+        row = rows_weekly[-2]
+        return {
+            "open":  float(row[1]),
+            "high":  float(row[2]),
+            "low":   float(row[3]),
+            "close": float(row[4]),
+        }
 
     else:  # monthly
         today = now_utc.date()
@@ -182,86 +176,39 @@ def get_gt_closed_candle(network, pool, timeframe):
 
 
 
-def get_binance_daily(pair):
-    """Fetch daily OHLC from Binance. Returns list of [ts, o, h, l, c, ...]."""
-    url = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": pair, "interval": "1d", "limit": 3}
+def get_bybit_klines(pair, interval, limit=3):
+    """Fetch OHLC from Bybit spot. Returns list newest-first."""
+    url = "https://api.bybit.com/v5/market/kline"
+    params = {"category": "spot", "symbol": pair, "interval": interval, "limit": limit}
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
-    return r.json()
+    data = r.json()
+    if data.get("retCode") != 0:
+        raise Exception(f"Bybit error: {data.get('retMsg')}")
+    return data["result"]["list"]  # newest-first
 
 
-def get_binance_closed_candle(pair, timeframe):
-    now_utc = datetime.now(timezone.utc)
-    rows = get_binance_daily(pair)
-    if not rows or len(rows) < 2:
-        return None
-
+def get_bybit_closed_candle(pair, timeframe):
     if timeframe == "daily":
-        # rows[-2] is the last fully closed daily candle
-        row = rows[-2]
-        return {
-            "open":  float(row[1]),
-            "high":  float(row[2]),
-            "low":   float(row[3]),
-            "close": float(row[4]),
-        }
+        rows = get_bybit_klines(pair, "D", limit=3)
+        if not rows or len(rows) < 2:
+            return None
+        row = rows[1]  # rows[0]=open candle, rows[1]=last closed
+        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
 
     elif timeframe == "weekly":
-        # Fetch more candles for weekly
-        url = "https://api.binance.com/api/v3/klines"
-        params = {"symbol": pair, "interval": "1d", "limit": 90}
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        all_rows = r.json()
-
-        today = now_utc.date()
-        start_of_this_week = today - timedelta(days=today.weekday())
-        end_of_last_week   = start_of_this_week - timedelta(days=1)
-        start_of_last_week = start_of_this_week - timedelta(days=7)
-
-        week_rows = [
-            row for row in all_rows
-            if start_of_last_week
-               <= datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date()
-               <= end_of_last_week
-        ]
-        if not week_rows:
+        rows = get_bybit_klines(pair, "W", limit=3)
+        if not rows or len(rows) < 2:
             return None
-        o  = float(week_rows[0][1])
-        h  = max(float(r[2]) for r in week_rows)
-        l  = min(float(r[3]) for r in week_rows)
-        cl = float(week_rows[-1][4])
-        return {"open": o, "high": h, "low": l, "close": cl}
+        row = rows[1]  # rows[0]=open week, rows[1]=last closed week
+        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
 
     else:  # monthly
-        url = "https://api.binance.com/api/v3/klines"
-        params = {"symbol": pair, "interval": "1d", "limit": 90}
-        r = requests.get(url, params=params, timeout=15)
-        r.raise_for_status()
-        all_rows = r.json()
-
-        today = now_utc.date()
-        if today.month == 1:
-            prev_month, prev_year = 12, today.year - 1
-        else:
-            prev_month, prev_year = today.month - 1, today.year
-
-        month_rows = [
-            row for row in all_rows
-            if (
-                datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date().month == prev_month
-                and
-                datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date().year  == prev_year
-            )
-        ]
-        if not month_rows:
+        rows = get_bybit_klines(pair, "M", limit=3)
+        if not rows or len(rows) < 2:
             return None
-        o  = float(month_rows[0][1])
-        h  = max(float(r[2]) for r in month_rows)
-        l  = min(float(r[3]) for r in month_rows)
-        cl = float(month_rows[-1][4])
-        return {"open": o, "high": h, "low": l, "close": cl}
+        row = rows[1]
+        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
 
 def fmt(price):
     if price >= 1:
@@ -370,9 +317,9 @@ def main():
             send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
 
-    for coin in BINANCE_COINS:
+    for coin in BYBIT_COINS:
         try:
-            ohlc = get_binance_closed_candle(coin["pair"], timeframe)
+            ohlc = get_bybit_closed_candle(coin["pair"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
