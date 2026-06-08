@@ -13,12 +13,12 @@ KRAKEN_COINS = [
     {"pair": "SUIUSD",  "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SOLUSDT",  "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "XMRUSDT",  "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "HYPEUSDT",  "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # DEX coins via GeckoTerminal
 GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
-        {"network": "solana", "pool": "DVa7Qmb5ct9RCpaU7UTpSaf3GVMYz17vNVU67alt9mtA", "label": "RAY", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
