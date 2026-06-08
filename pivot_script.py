@@ -13,12 +13,16 @@ KRAKEN_COINS = [
     {"pair": "SUIUSD",  "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SOLUSDT",  "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "XMRUSDT",  "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"pair": "HYPEUSDT",  "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # DEX coins via GeckoTerminal
 GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
+]
+
+# Binance spot pairs (for coins not on Kraken)
+BINANCE_COINS = [
+    {"pair": "HYPEUSDT", "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
@@ -177,6 +181,88 @@ def get_gt_closed_candle(network, pool, timeframe):
         return {"open": o, "high": h, "low": l, "close": cl}
 
 
+
+def get_binance_daily(pair):
+    """Fetch daily OHLC from Binance. Returns list of [ts, o, h, l, c, ...]."""
+    url = "https://api.binance.com/api/v3/klines"
+    params = {"symbol": pair, "interval": "1d", "limit": 3}
+    r = requests.get(url, params=params, timeout=15)
+    r.raise_for_status()
+    return r.json()
+
+
+def get_binance_closed_candle(pair, timeframe):
+    now_utc = datetime.now(timezone.utc)
+    rows = get_binance_daily(pair)
+    if not rows or len(rows) < 2:
+        return None
+
+    if timeframe == "daily":
+        # rows[-2] is the last fully closed daily candle
+        row = rows[-2]
+        return {
+            "open":  float(row[1]),
+            "high":  float(row[2]),
+            "low":   float(row[3]),
+            "close": float(row[4]),
+        }
+
+    elif timeframe == "weekly":
+        # Fetch more candles for weekly
+        url = "https://api.binance.com/api/v3/klines"
+        params = {"symbol": pair, "interval": "1d", "limit": 90}
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        all_rows = r.json()
+
+        today = now_utc.date()
+        start_of_this_week = today - timedelta(days=today.weekday())
+        end_of_last_week   = start_of_this_week - timedelta(days=1)
+        start_of_last_week = start_of_this_week - timedelta(days=7)
+
+        week_rows = [
+            row for row in all_rows
+            if start_of_last_week
+               <= datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date()
+               <= end_of_last_week
+        ]
+        if not week_rows:
+            return None
+        o  = float(week_rows[0][1])
+        h  = max(float(r[2]) for r in week_rows)
+        l  = min(float(r[3]) for r in week_rows)
+        cl = float(week_rows[-1][4])
+        return {"open": o, "high": h, "low": l, "close": cl}
+
+    else:  # monthly
+        url = "https://api.binance.com/api/v3/klines"
+        params = {"symbol": pair, "interval": "1d", "limit": 90}
+        r = requests.get(url, params=params, timeout=15)
+        r.raise_for_status()
+        all_rows = r.json()
+
+        today = now_utc.date()
+        if today.month == 1:
+            prev_month, prev_year = 12, today.year - 1
+        else:
+            prev_month, prev_year = today.month - 1, today.year
+
+        month_rows = [
+            row for row in all_rows
+            if (
+                datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date().month == prev_month
+                and
+                datetime.fromtimestamp(int(row[0]) / 1000, tz=timezone.utc).date().year  == prev_year
+            )
+        ]
+        if not month_rows:
+            return None
+        o  = float(month_rows[0][1])
+        h  = max(float(r[2]) for r in month_rows)
+        l  = min(float(r[3]) for r in month_rows)
+        cl = float(month_rows[-1][4])
+        return {"open": o, "high": h, "low": l, "close": cl}
+
 def fmt(price):
     if price >= 1:
         return f"{price:,.2f}"
@@ -275,6 +361,18 @@ def main():
     for coin in GT_COINS:
         try:
             ohlc = get_gt_closed_candle(coin["network"], coin["pool"], timeframe)
+            if ohlc is None:
+                send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
+                continue
+            msg = build_message(coin["label"], tf_label, ohlc)
+            send(coin["webhook"], msg)
+        except Exception as e:
+            send(coin["webhook"], f":x: {coin['label']} error: {e}")
+
+
+    for coin in BINANCE_COINS:
+        try:
+            ohlc = get_binance_closed_candle(coin["pair"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
