@@ -12,7 +12,7 @@ KRAKEN_COINS = [
     {"pair": "ETHUSDT",  "label": "ETH", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SUIUSD",  "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SOLUSDT",  "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
-    {"pair": "XMRUSDT",  "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "XMRUSDT",  "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},h
 ]
 
 # DEX coins via GeckoTerminal
@@ -22,7 +22,7 @@ GT_COINS = [
 
 # Bybit spot pairs (for coins not on Kraken)
 BYBIT_COINS = [
-    {"pair": "HYPEUSDT", "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "HYPEUSDT", "label": "HYPE", "category": "linear", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
@@ -176,10 +176,10 @@ def get_gt_closed_candle(network, pool, timeframe):
 
 
 
-def get_bybit_klines(pair, interval, limit=3):
+def get_bybit_klines(pair, interval, limit=3, category="spot"):
     """Fetch OHLC from Bybit spot. Returns list newest-first."""
     url = "https://api.bybit.com/v5/market/kline"
-    params = {"category": "spot", "symbol": pair, "interval": interval, "limit": limit}
+    params = {"category": category, "symbol": pair, "interval": interval, "limit": limit}
     r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
     data = r.json()
@@ -188,23 +188,23 @@ def get_bybit_klines(pair, interval, limit=3):
     return data["result"]["list"]  # newest-first
 
 
-def get_bybit_closed_candle(pair, timeframe):
+def get_bybit_closed_candle(pair, timeframe, category="spot"):
     if timeframe == "daily":
-        rows = get_bybit_klines(pair, "D", limit=3)
+        rows = get_bybit_klines(pair, "D", limit=3, category=category)
         if not rows or len(rows) < 2:
             return None
         row = rows[1]  # rows[0]=open candle, rows[1]=last closed
         return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
 
     elif timeframe == "weekly":
-        rows = get_bybit_klines(pair, "W", limit=3)
+        rows = get_bybit_klines(pair, "W", limit=3, category=category)
         if not rows or len(rows) < 2:
             return None
         row = rows[1]  # rows[0]=open week, rows[1]=last closed week
         return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
 
     else:  # monthly
-        rows = get_bybit_klines(pair, "M", limit=3)
+        rows = get_bybit_klines(pair, "M", limit=3, category=category)
         if not rows or len(rows) < 2:
             return None
         row = rows[1]
@@ -319,7 +319,7 @@ def main():
 
     for coin in BYBIT_COINS:
         try:
-            ohlc = get_bybit_closed_candle(coin["pair"], timeframe)
+            ohlc = get_bybit_closed_candle(coin["pair"], timeframe, category=coin.get("category", "spot"))
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
