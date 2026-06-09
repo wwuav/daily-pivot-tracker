@@ -20,9 +20,9 @@ GT_COINS = [
     {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
-# Bybit spot pairs (for coins not on Kraken)
-BYBIT_COINS = [
-    {"pair": "HYPEUSDT", "label": "HYPE", "category": "linear", "webhook": DISCORD_WEBHOOK_ALTS},
+# Hyperliquid coins (HYPE native chain)
+HL_COINS = [
+        {"coin": "HYPE", "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 
@@ -176,40 +176,79 @@ def get_gt_closed_candle(network, pool, timeframe):
 
 
 
-def get_bybit_klines(pair, interval, limit=3, category="spot"):
-    """Fetch OHLC from Bybit spot. Returns list newest-first."""
-    url = "https://api.bybit.com/v5/market/kline"
-    params = {"category": category, "symbol": pair, "interval": interval, "limit": limit}
-    r = requests.get(url, params=params, timeout=15)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("retCode") != 0:
-        raise Exception(f"Bybit error: {data.get('retMsg')}")
-    return data["result"]["list"]  # newest-first
+def get_hl_candles(coin, interval="1d", lookback_days=5):
+        """Fetch OHLC candles from Hyperliquid. Returns list newest-first."""
+        url = "https://api.hyperliquid.xyz/info"
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        start_ms = now_ms - lookback_days * 86400 * 1000
+        payload = {
+                    "type": "candleSnapshot",
+                    "req": {"coin": coin, "interval": interval, "startTime": start_ms, "endTime": now_ms},
+        }
+        r = requests.post(url, json=payload, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        return list(reversed(data))  # newest-first
 
 
-def get_bybit_closed_candle(pair, timeframe, category="spot"):
-    if timeframe == "daily":
-        rows = get_bybit_klines(pair, "D", limit=3, category=category)
-        if not rows or len(rows) < 2:
-            return None
-        row = rows[1]  # rows[0]=open candle, rows[1]=last closed
-        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
+def get_hl_closed_candle(coin, timeframe):
+        if timeframe == "daily":
+                    candles = get_hl_candles(coin, "1d", lookback_days=5)
+                    if not candles or len(candles) < 2:
+                                    return None
+                                c = candles[1]  # candles[0]=open today, candles[1]=last closed
+                    return {"open": float(c["o"]), "high": float(c["h"]), "low": float(c["l"]), "close": float(c["c"])}
 
-    elif timeframe == "weekly":
-        rows = get_bybit_klines(pair, "W", limit=3, category=category)
-        if not rows or len(rows) < 2:
-            return None
-        row = rows[1]  # rows[0]=open week, rows[1]=last closed week
-        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
+elif timeframe == "weekly":
+        candles = get_hl_candles(coin, "1d", lookback_days=20)
+        if not candles:
+                        return None
+                    now_utc = datetime.now(timezone.utc)
+        today = now_utc.date()
+        start_of_this_week = today - timedelta(days=today.weekday())
+        end_of_last_week   = start_of_this_week - timedelta(days=1)
+        start_of_last_week = start_of_this_week - timedelta(days=7)
+        week_candles = [
+                        c for c in candles
+                        if (
+                                            start_of_last_week
+                                            <= datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date()
+                                            <= end_of_last_week
+                        )
+        ]
+        if not week_candles:
+                        return None
+                    o  = float(week_candles[-1]["o"])
+        h  = max(float(c["h"]) for c in week_candles)
+        l  = min(float(c["l"]) for c in week_candles)
+        cl = float(week_candles[0]["c"])
+        return {"open": o, "high": h, "low": l, "close": cl}
 
-    else:  # monthly
-        rows = get_bybit_klines(pair, "M", limit=3, category=category)
-        if not rows or len(rows) < 2:
-            return None
-        row = rows[1]
-        return {"open": float(row[1]), "high": float(row[2]), "low": float(row[3]), "close": float(row[4])}
-
+else:  # monthly
+        candles = get_hl_candles(coin, "1d", lookback_days=65)
+            if not candles:
+                            return None
+                        now_utc = datetime.now(timezone.utc)
+        today = now_utc.date()
+        if today.month == 1:
+                        prev_month, prev_year = 12, today.year - 1
+        else:
+                        prev_month, prev_year = today.month - 1, today.year
+                    month_candles = [
+                                    c for c in candles
+                                    if (
+                                                        datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().month == prev_month
+                                                        and
+                                                        datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().year == prev_year
+                                    )
+                    ]
+        if not month_candles:
+                        return None
+                    o  = float(month_candles[-1]["o"])
+        h  = max(float(c["h"]) for c in month_candles)
+        l  = min(float(c["l"]) for c in month_candles)
+        cl = float(month_candles[0]["c"])
+        return {"open": o, "high": h, "low": l, "close": cl}
 def fmt(price):
     if price >= 1:
         return f"{price:,.2f}"
@@ -317,9 +356,9 @@ def main():
             send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
 
-    for coin in BYBIT_COINS:
+    for coin in HL_COINS:
         try:
-            ohlc = get_bybit_closed_candle(coin["pair"], timeframe, category=coin.get("category", "spot"))
+                        ohlc = get_hl_closed_candle(coin["coin"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
