@@ -192,63 +192,63 @@ def get_hl_candles(coin, interval="1d", lookback_days=5):
 
 
 def get_hl_closed_candle(coin, timeframe):
-        if timeframe == "daily":
-                    candles = get_hl_candles(coin, "1d", lookback_days=5)
-                    if not candles or len(candles) < 2:
-                                    return None
-                                c = candles[1]  # candles[0]=open today, candles[1]=last closed
-                    return {"open": float(c["o"]), "high": float(c["h"]), "low": float(c["l"]), "close": float(c["c"])}
+    if timeframe == "daily":
+        candles = get_hl_candles(coin, "1d", lookback_days=5)
+        if not candles or len(candles) < 2:
+            return None
+        c = candles[1]  # candles[0]=open today, candles[1]=last closed
+        return {"open": float(c["o"]), "high": float(c["h"]), "low": float(c["l"]), "close": float(c["c"])}
 
-elif timeframe == "weekly":
+    elif timeframe == "weekly":
         candles = get_hl_candles(coin, "1d", lookback_days=20)
         if not candles:
-                        return None
-                    now_utc = datetime.now(timezone.utc)
+            return None
+        now_utc = datetime.now(timezone.utc)
         today = now_utc.date()
         start_of_this_week = today - timedelta(days=today.weekday())
         end_of_last_week   = start_of_this_week - timedelta(days=1)
         start_of_last_week = start_of_this_week - timedelta(days=7)
         week_candles = [
-                        c for c in candles
-                        if (
-                                            start_of_last_week
-                                            <= datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date()
-                                            <= end_of_last_week
-                        )
+            c for c in candles
+            if (
+                start_of_last_week
+                <= datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date()
+                <= end_of_last_week
+            )
         ]
         if not week_candles:
-                        return None
-                    o  = float(week_candles[-1]["o"])
+            return None
+        o  = float(week_candles[-1]["o"])
         h  = max(float(c["h"]) for c in week_candles)
         l  = min(float(c["l"]) for c in week_candles)
         cl = float(week_candles[0]["c"])
         return {"open": o, "high": h, "low": l, "close": cl}
 
-else:  # monthly
+    else:  # monthly
         candles = get_hl_candles(coin, "1d", lookback_days=65)
-            if not candles:
-                            return None
-                        now_utc = datetime.now(timezone.utc)
+        if not candles:
+            return None
+        now_utc = datetime.now(timezone.utc)
         today = now_utc.date()
         if today.month == 1:
-                        prev_month, prev_year = 12, today.year - 1
+            prev_month, prev_year = 12, today.year - 1
         else:
-                        prev_month, prev_year = today.month - 1, today.year
-                    month_candles = [
-                                    c for c in candles
-                                    if (
-                                                        datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().month == prev_month
-                                                        and
-                                                        datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().year == prev_year
-                                    )
-                    ]
+            prev_month, prev_year = today.month - 1, today.year
+        month_candles = [
+            c for c in candles
+            if (
+                datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().month == prev_month
+                and
+                datetime.fromtimestamp(c["t"] / 1000, tz=timezone.utc).date().year == prev_year
+            )
+        ]
         if not month_candles:
-                        return None
-                    o  = float(month_candles[-1]["o"])
+            return None
+        o  = float(month_candles[-1]["o"])
         h  = max(float(c["h"]) for c in month_candles)
         l  = min(float(c["l"]) for c in month_candles)
         cl = float(month_candles[0]["c"])
-        return {"open": o, "high": h, "low": l, "close": cl}
+                return {"open": o, "high": h, "low": l, "close": cl}
 def fmt(price):
     if price >= 1:
         return f"{price:,.2f}"
