@@ -358,7 +358,7 @@ def main():
 
     for coin in HL_COINS:
         try:
-                        ohlc = get_hl_closed_candle(coin["coin"], timeframe)
+            ohlc = get_hl_closed_candle(coin["coin"], timeframe)
             if ohlc is None:
                 send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
