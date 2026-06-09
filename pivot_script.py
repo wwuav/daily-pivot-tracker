@@ -17,7 +17,7 @@ KRAKEN_COINS = [
 
 # DEX coins via GeckoTerminal
 GT_COINS = [
-    {"network": "bsc", "pool": "0x7e58f160b5b77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"network": "bsc", "pool": "0x7e58f160b5hb77b8b24cd9900c09a3e730215ac47", "label": "ASTER", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # Hyperliquid coins (HYPE native chain)
@@ -248,7 +248,7 @@ def get_hl_closed_candle(coin, timeframe):
         h  = max(float(c["h"]) for c in month_candles)
         l  = min(float(c["l"]) for c in month_candles)
         cl = float(month_candles[0]["c"])
-                return {"open": o, "high": h, "low": l, "close": cl}
+        return {"open": o, "high": h, "low": l, "close": cl}
 def fmt(price):
     if price >= 1:
         return f"{price:,.2f}"
