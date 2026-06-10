@@ -12,10 +12,16 @@ on:
           - daily
           - weekly
           - monthly
+  schedule:
+    - cron: '0 0 * * *'    # Daily: every day at midnight UTC (8pm EST / 9pm EDT)
+    - cron: '0 0 * * 1'    # Weekly: every Monday at midnight UTC
+    - cron: '0 0 1 * *'    # Monthly: 1st of each month at midnight UTC
 
 jobs:
   daily-pivots:
-    if: inputs.timeframe == 'daily'
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 0 * * *')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +35,9 @@ jobs:
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   weekly-pivots:
-    if: inputs.timeframe == 'weekly'
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 0 * * 1')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +51,9 @@ jobs:
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
   monthly-pivots:
-    if: inputs.timeframe == 'monthly'
+    if: |
+      (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly') ||
+      (github.event_name == 'schedule' && github.event.schedule == '0 0 1 * *')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
