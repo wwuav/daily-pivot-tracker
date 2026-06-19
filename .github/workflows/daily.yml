@@ -4,13 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       timeframe:
-        description: "Timeframe (daily / weekly)"
+        description: "Timeframe (daily)"
         required: true
         default: "daily"
         type: choice
         options:
           - daily
-          - weekly
   schedule:
     - cron: '0 0 * * *'    # Daily: every day at midnight UTC (8pm EST / 9pm EDT)
     - cron: '0 0 * * 1'    # Weekly: every Monday at midnight UTC
