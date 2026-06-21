@@ -10,8 +10,8 @@ on:
         type: choice
         options:
           - daily
-        - weekly
-        - monthly
+          - weekly
+          - monthly
   schedule:
     - cron: '0 0 * * *'    # Daily: every day at midnight UTC (8pm EST / 9pm EDT)
     - cron: '0 0 * * 1'    # Weekly: every Monday at midnight UTC
