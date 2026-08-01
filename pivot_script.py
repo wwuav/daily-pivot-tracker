@@ -17,6 +17,8 @@ KRAKEN_COINS = [
     {"pair": "SUIUSD", "label": "SUI", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "SOLUSDT", "label": "SOL", "webhook": DISCORD_WEBHOOK_ALTS},
     {"pair": "XMRUSDT", "label": "XMR", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "TAOUSD", "label": "TAO", "webhook": DISCORD_WEBHOOK_ALTS},
+    {"pair": "INJUSD", "label": "INJ", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
 # DEX coins via GeckoTerminal
