@@ -13,14 +13,16 @@ on:
           - weekly
           - monthly
   schedule:
-    # Daily: fires ~8pm ET every day. Two UTC times cover EDT/EST; the script
-    # itself only actually posts if it's truly within ~10 min of real 8pm ET.
+    # Daily: fires as close to 8pm ET as GitHub's scheduler allows. Two UTC
+    # times cover EDT/EST. Actual dedup against duplicate/delayed firings for
+    # the SAME closed session happens via the cache step below, not a clock
+    # check, so a late-running job still posts instead of silently skipping.
     - cron: '0 0 * * *'   # ~8pm EDT
     - cron: '0 1 * * *'   # ~8pm EST
-    # Weekly: same idea, but the script also requires it to be Monday.
+    # Weekly: same idea, but only matches Monday-anchored cron slots.
     - cron: '0 0 * * 1'
     - cron: '0 1 * * 1'
-    # Monthly: same idea, but the script also requires it to be the 1st.
+    # Monthly: same idea, but only matches 1st-of-month cron slots.
     - cron: '0 0 1 * *'
     - cron: '0 1 1 * *'
 
@@ -36,10 +38,29 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install requests
-      - run: python pivot_script.py daily
+
+      - name: Compute session key
+        id: sesskey
+        run: echo "key=$(python pivot_script.py daily key)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if this session was already posted
+        if: github.event_name == 'schedule'
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .posted-marker
+          key: daily-posted-${{ steps.sesskey.outputs.key }}
+
+      - name: Post daily pivots
+        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        run: python pivot_script.py daily
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+
+      - name: Mark session as posted
+        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        run: touch .posted-marker
 
   weekly-pivots:
     if: |
@@ -52,10 +73,29 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install requests
-      - run: python pivot_script.py weekly
+
+      - name: Compute session key
+        id: sesskey
+        run: echo "key=$(python pivot_script.py weekly key)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if this session was already posted
+        if: github.event_name == 'schedule'
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .posted-marker
+          key: weekly-posted-${{ steps.sesskey.outputs.key }}
+
+      - name: Post weekly pivots
+        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        run: python pivot_script.py weekly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+
+      - name: Mark session as posted
+        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        run: touch .posted-marker
 
   monthly-pivots:
     if: |
@@ -68,7 +108,26 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install requests
-      - run: python pivot_script.py monthly
+
+      - name: Compute session key
+        id: sesskey
+        run: echo "key=$(python pivot_script.py monthly key)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if this session was already posted
+        if: github.event_name == 'schedule'
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: .posted-marker
+          key: monthly-posted-${{ steps.sesskey.outputs.key }}
+
+      - name: Post monthly pivots
+        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        run: python pivot_script.py monthly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
+
+      - name: Mark session as posted
+        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        run: touch .posted-marker
