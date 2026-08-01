@@ -9,7 +9,6 @@ DISCORD_WEBHOOK_ALTS = os.environ["DISCORD_WEBHOOK"]
 
 ET = ZoneInfo("America/New_York")
 SESSION_HOUR = 20  # 8pm ET daily session close/open
-FIRE_TOLERANCE_MIN = 10  # only actually post within this many minutes of the real 8pm ET close
 
 # Kraken USDT pairs -> display labels
 KRAKEN_COINS = [
@@ -32,6 +31,9 @@ HL_COINS = [
 
 
 # ---------- Session boundary math (8pm ET, DST-safe) ----------
+# These are delay-tolerant by design: no matter what wall-clock time this
+# actually executes at, they always resolve to the most recently closed
+# 8pm-ET session for the given timeframe.
 
 def _daily_bounds(now_et):
     close = now_et.replace(hour=SESSION_HOUR, minute=0, second=0, microsecond=0)
@@ -68,18 +70,6 @@ def get_session_window(timeframe, now_et):
         return _weekly_bounds(now_et)
     else:
         return _monthly_bounds(now_et)
-
-
-def should_fire_now(timeframe, now_et):
-    """Only post right when the relevant session candle actually closes."""
-    target = now_et.replace(hour=SESSION_HOUR, minute=0, second=0, microsecond=0)
-    if abs((now_et - target).total_seconds()) > FIRE_TOLERANCE_MIN * 60:
-        return False
-    if timeframe == "weekly" and now_et.weekday() != 0:  # Monday close
-        return False
-    if timeframe == "monthly" and now_et.day != 1:
-        return False
-    return True
 
 
 # ---------- Generic hourly aggregation ----------
@@ -173,7 +163,7 @@ def get_hl_closed_candle(coin, timeframe, now_et):
     return aggregate_hourly(candles, start_ts, end_ts)
 
 
-# ---------- Pivots / formatting (unchanged) ----------
+# ---------- Pivots / formatting ----------
 
 def fmt(price):
     if price >= 1:
@@ -229,9 +219,17 @@ def build_message(label, tf_label, ohlc):
     return "\n".join(lines)
 
 
+def print_session_key(timeframe, now_et):
+    """Prints the UTC close-timestamp of the current session for this timeframe.
+    Used by the workflow as a cache key so re-runs / delayed duplicate cron
+    firings for the SAME closed session don't post twice."""
+    _, end_et = get_session_window(timeframe, now_et)
+    print(int(end_et.astimezone(timezone.utc).timestamp()))
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python pivot_script.py [daily|weekly|monthly]")
+        print("Usage: python pivot_script.py [daily|weekly|monthly] [key]")
         sys.exit(1)
 
     timeframe = sys.argv[1].lower()
@@ -240,9 +238,10 @@ def main():
         sys.exit(1)
 
     now_et = datetime.now(ET)
+    mode = sys.argv[2].lower() if len(sys.argv) > 2 else "post"
 
-    if not should_fire_now(timeframe, now_et):
-        print(f"Skipping {timeframe}: not at an 8pm ET session close right now ({now_et.isoformat()}).")
+    if mode == "key":
+        print_session_key(timeframe, now_et)
         sys.exit(0)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
