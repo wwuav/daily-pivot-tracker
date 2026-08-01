@@ -164,6 +164,9 @@ def get_hl_closed_candle(coin, timeframe, now_et):
 
 
 # ---------- Pivots / formatting ----------
+# Classic "Floor Trader" pivot formula (the most widely documented and used
+# convention across trading platforms). R3/S3 extend from R1/S1 (not R2/S2),
+# and R4/S4 continue the same (H-L) step beyond R3/S3.
 
 def fmt(price):
     if price >= 1:
@@ -174,14 +177,19 @@ def fmt(price):
 
 def calc_pivots(o, h, l, c):
     P = (h + l + c) / 3
+    rng = h - l
+
     S1 = 2 * P - h
-    S2 = P - (h - l)
-    S3 = S2 - (h - l)
-    S4 = S3 - (h - l)
     R1 = 2 * P - l
-    R2 = P + (h - l)
-    R3 = R2 + (h - l)
-    R4 = R3 + (h - l)
+
+    S2 = P - rng
+    R2 = P + rng
+
+    S3 = S1 - rng   # = L - 2*(H - P), classic Floor formula
+    R3 = R1 + rng   # = H + 2*(P - L), classic Floor formula
+
+    S4 = S3 - rng
+    R4 = R3 + rng
 
     def mp(a, b):
         return (a + b) / 2
