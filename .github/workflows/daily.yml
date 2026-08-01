@@ -13,15 +13,22 @@ on:
           - weekly
           - monthly
   schedule:
-    - cron: '3 0 * * *'   # Daily: every day at 00:03 UTC (8pm EST / 9pm EDT) - offset avoids GitHub cron congestion
-    - cron: '3 0 * * 1'   # Weekly: every Monday at 00:03 UTC
-    - cron: '3 0 1 * *'   # Monthly: 1st of each month at 00:03 UTC
+    # Daily: fires ~8pm ET every day. Two UTC times cover EDT/EST; the script
+    # itself only actually posts if it's truly within ~10 min of real 8pm ET.
+    - cron: '0 0 * * *'   # ~8pm EDT
+    - cron: '0 1 * * *'   # ~8pm EST
+    # Weekly: same idea, but the script also requires it to be Monday.
+    - cron: '0 0 * * 1'
+    - cron: '0 1 * * 1'
+    # Monthly: same idea, but the script also requires it to be the 1st.
+    - cron: '0 0 1 * *'
+    - cron: '0 1 1 * *'
 
 jobs:
   daily-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily') ||
-      (github.event_name == 'schedule' && github.event.schedule == '3 0 * * *')
+      (github.event_name == 'schedule' && (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 1 * * *'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +44,7 @@ jobs:
   weekly-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly') ||
-      (github.event_name == 'schedule' && github.event.schedule == '3 0 * * 1')
+      (github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 1 * * 1'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,7 +60,7 @@ jobs:
   monthly-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly') ||
-      (github.event_name == 'schedule' && github.event.schedule == '3 0 1 * *')
+      (github.event_name == 'schedule' && (github.event.schedule == '0 0 1 * *' || github.event.schedule == '0 1 1 * *'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
