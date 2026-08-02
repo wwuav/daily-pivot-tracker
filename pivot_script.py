@@ -91,12 +91,25 @@ def aggregate_hourly(candles, start_ts, end_ts):
 
 # ---------- Kraken ----------
 
+KRAKEN_INTERVALS = [1, 5, 15, 30, 60, 240, 1440, 10080, 21600]  # minutes; Kraken caps OHLC responses at ~720 candles
+
+def _pick_kraken_interval(start_ts, end_ts):
+    # Choose the finest interval whose candle count still fits Kraken's ~720-candle cap.
+    # (interval=60 alone can't reach back a full month, which silently truncated monthly pivots)
+    span_minutes = (end_ts - start_ts) / 60
+    for iv in KRAKEN_INTERVALS:
+        if span_minutes / iv <= 700:
+            return iv
+    return KRAKEN_INTERVALS[-1]
+
+
 def get_kraken_hourly_range(pair, start_ts, end_ts):
     url = "https://api.kraken.com/0/public/OHLC"
-    since = start_ts - 3600
+    interval = _pick_kraken_interval(start_ts, end_ts)
+    since = start_ts - interval * 60
     out = []
     for _ in range(6):  # safety cap on pagination loops
-        params = {"pair": pair, "interval": 60, "since": since}
+        params = {"pair": pair, "interval": interval, "since": since}
         r = requests.get(url, params=params, timeout=15)
         r.raise_for_status()
         body = r.json()
@@ -115,8 +128,8 @@ def get_kraken_hourly_range(pair, start_ts, end_ts):
     return out
 
 
-def get_kraken_closed_candle(pair, timeframe, now_et):
-    start_et, end_et = get_session_window(timeframe, now_et)
+    def get_kraken_closed_candle(pair, timeframe, now_et):
+        start_et, end_et = get_session_window(timeframe, now_et)
     start_ts = int(start_et.astimezone(timezone.utc).timestamp())
     end_ts = int(end_et.astimezone(timezone.utc).timestamp())
     candles = get_kraken_hourly_range(pair, start_ts, end_ts)
