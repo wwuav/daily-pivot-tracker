@@ -128,7 +128,7 @@ def get_kraken_hourly_range(pair, start_ts, end_ts):
     return out
 
 
-    def get_kraken_closed_candle(pair, timeframe, now_et):
+def get_kraken_closed_candle(pair, timeframe, now_et):
         start_et, end_et = get_session_window(timeframe, now_et)
         start_ts = int(start_et.astimezone(timezone.utc).timestamp())
         end_ts = int(end_et.astimezone(timezone.utc).timestamp())
