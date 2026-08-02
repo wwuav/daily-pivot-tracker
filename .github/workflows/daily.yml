@@ -17,8 +17,8 @@ on:
     # times cover EDT/EST. Actual dedup against duplicate/delayed firings for
     # the SAME closed session happens via the cache step below, not a clock
     # check, so a late-running job still posts instead of silently skipping.
-    - cron: '0 0 * * *'   # ~8pm EDT
-    - cron: '0 1 * * *'   # ~8pm EST
+    - cron: '0,5,10,15 0 * * *' # burst ~8:00-8:15pm EDT
+    - cron: '0,5,10,15 1 * * *' # burst ~8:00-8:15pm EST
     # Weekly: same idea, but only matches Monday-anchored cron slots.
     - cron: '0 0 * * 1'
     - cron: '0 1 * * 1'
@@ -30,7 +30,7 @@ jobs:
   daily-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily') ||
-      (github.event_name == 'schedule' && (github.event.schedule == '0 0 * * *' || github.event.schedule == '0 1 * * *'))
+      (github.event_name == 'schedule' && (github.event.schedule == '0,5,10,15 0 * * *' || github.event.schedule == '0,5,10,15 1 * * *'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
