@@ -4,8 +4,8 @@ import sys
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
-DISCORD_WEBHOOK_BTC = os.environ["DISCORD_WEBHOOK_BTC"]
-DISCORD_WEBHOOK_ALTS = os.environ["DISCORD_WEBHOOK"]
+DISCORD_WEBHOOK_BTC = os.environ.get("DISCORD_WEBHOOK_BTC", "")
+DISCORD_WEBHOOK_ALTS = os.environ.get("DISCORD_WEBHOOK", "")
 
 ET = ZoneInfo("America/New_York")
 SESSION_HOUR = 20  # 8pm ET daily session close/open
