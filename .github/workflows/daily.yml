@@ -13,24 +13,15 @@ on:
           - weekly
           - monthly
   schedule:
-    # Daily: fires as close to 8pm ET as GitHub's scheduler allows. Two UTC
-    # times cover EDT/EST. Actual dedup against duplicate/delayed firings for
-    # the SAME closed session happens via the cache step below, not a clock
-    # check, so a late-running job still posts instead of silently skipping.
-    - cron: '0,5,10,15 0 * * *' # burst ~8:00-8:15pm EDT
-    - cron: '0,5,10,15 1 * * *' # burst ~8:00-8:15pm EST
-    # Weekly: same idea, but only matches Monday-anchored cron slots.
-    - cron: '0 0 * * 1'
-    - cron: '0 1 * * 1'
-    # Monthly: same idea, but only matches 1st-of-month cron slots.
-    - cron: '0 0 1 * *'
-    - cron: '0 1 1 * *'
-
+    # Runs every 15 min around the clock; the dedup cache in each job below
+    # makes sure a session only posts once, so new daily/weekly/monthly
+    # targets go out within ~15 min of closing.
+    - cron: '*/15 * * * *'
 jobs:
   daily-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily') ||
-      (github.event_name == 'schedule' && (github.event.schedule == '0,5,10,15 0 * * *' || github.event.schedule == '0,5,10,15 1 * * *'))
+      (github.event_name == 'schedule')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +35,6 @@ jobs:
         run: echo "key=$(python pivot_script.py daily key)" >> "$GITHUB_OUTPUT"
 
       - name: Check if this session was already posted
-        if: github.event_name == 'schedule'
         id: cache
         uses: actions/cache@v4
         with:
@@ -52,20 +42,20 @@ jobs:
           key: daily-posted-${{ steps.sesskey.outputs.key }}
 
       - name: Post daily pivots
-        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: python pivot_script.py daily
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
       - name: Mark session as posted
-        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: touch .posted-marker
 
   weekly-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly') ||
-      (github.event_name == 'schedule' && (github.event.schedule == '0 0 * * 1' || github.event.schedule == '0 1 * * 1'))
+      (github.event_name == 'schedule')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +69,6 @@ jobs:
         run: echo "key=$(python pivot_script.py weekly key)" >> "$GITHUB_OUTPUT"
 
       - name: Check if this session was already posted
-        if: github.event_name == 'schedule'
         id: cache
         uses: actions/cache@v4
         with:
@@ -87,20 +76,20 @@ jobs:
           key: weekly-posted-${{ steps.sesskey.outputs.key }}
 
       - name: Post weekly pivots
-        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: python pivot_script.py weekly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
       - name: Mark session as posted
-        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: touch .posted-marker
 
   monthly-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly') ||
-      (github.event_name == 'schedule' && (github.event.schedule == '0 0 1 * *' || github.event.schedule == '0 1 1 * *'))
+      (github.event_name == 'schedule')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +103,6 @@ jobs:
         run: echo "key=$(python pivot_script.py monthly key)" >> "$GITHUB_OUTPUT"
 
       - name: Check if this session was already posted
-        if: github.event_name == 'schedule'
         id: cache
         uses: actions/cache@v4
         with:
@@ -122,12 +110,12 @@ jobs:
           key: monthly-posted-${{ steps.sesskey.outputs.key }}
 
       - name: Post monthly pivots
-        if: github.event_name != 'schedule' || steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: python pivot_script.py monthly
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           DISCORD_WEBHOOK_BTC: ${{ secrets.DISCORD_WEBHOOK_BTC }}
 
       - name: Mark session as posted
-        if: github.event_name == 'schedule' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.cache.outputs.cache-hit != 'true'
         run: touch .posted-marker
