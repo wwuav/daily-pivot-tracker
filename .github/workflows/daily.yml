@@ -16,11 +16,35 @@ on:
     # Runs every 15 min around the clock; the dedup cache in each job below
     # makes sure a session only posts once, so new daily/weekly/monthly
     # targets go out within ~15 min of closing.
-    - cron: '*/15 * * * *'
+    - cron: '*/15 * * * *' # Runs every 15 minutes
+
 concurrency:
   group: pivot-targets
   cancel-in-progress: false
+
 jobs:
+  schedule-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      is_weekly_day: ${{ steps.check.outputs.is_weekly_day }}
+      is_monthly_day: ${{ steps.check.outputs.is_monthly_day }}
+    steps:
+      - name: Determine if today is a weekly/monthly session day (ET)
+        id: check
+        run: |
+          day_of_week=$(TZ="America/New_York" date +%u)
+          day_of_month=$(TZ="America/New_York" date +%d)
+          if [ "$day_of_week" = "1" ]; then
+            echo "is_weekly_day=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_weekly_day=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$day_of_month" = "01" ]; then
+            echo "is_monthly_day=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_monthly_day=false" >> "$GITHUB_OUTPUT"
+          fi
+
   daily-pivots:
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'daily') ||
@@ -56,9 +80,10 @@ jobs:
         run: touch .posted-marker
 
   weekly-pivots:
+    needs: schedule-gate
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'weekly') ||
-      (github.event_name == 'schedule')
+      (github.event_name == 'schedule' && needs.schedule-gate.outputs.is_weekly_day == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,9 +115,10 @@ jobs:
         run: touch .posted-marker
 
   monthly-pivots:
+    needs: schedule-gate
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.timeframe == 'monthly') ||
-      (github.event_name == 'schedule')
+      (github.event_name == 'schedule' && needs.schedule-gate.outputs.is_monthly_day == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
