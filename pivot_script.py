@@ -1,6 +1,7 @@
 import requests
 import os
 import sys
+import time
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -31,7 +32,6 @@ HL_COINS = [
     {"coin": "HYPE", "label": "HYPE", "webhook": DISCORD_WEBHOOK_ALTS},
 ]
 
-
 # ---------- Session boundary math (8pm ET, DST-safe) ----------
 # These are delay-tolerant by design: no matter what wall-clock time this
 # actually executes at, they always resolve to the most recently closed
@@ -44,7 +44,6 @@ def _daily_bounds(now_et):
     start = close - timedelta(days=1)
     return start, close
 
-
 def _weekly_bounds(now_et):
     # Week runs Monday 8pm ET -> Monday 8pm ET (matches previous Mon-Sun convention)
     monday = now_et - timedelta(days=now_et.weekday())
@@ -53,7 +52,6 @@ def _weekly_bounds(now_et):
         close -= timedelta(days=7)
     start = close - timedelta(days=7)
     return start, close
-
 
 def _monthly_bounds(now_et):
     close = now_et.replace(day=1, hour=SESSION_HOUR, minute=0, second=0, microsecond=0)
@@ -64,7 +62,6 @@ def _monthly_bounds(now_et):
     start = last_day_prev.replace(day=1, hour=SESSION_HOUR, minute=0, second=0, microsecond=0)
     return start, close
 
-
 def get_session_window(timeframe, now_et):
     if timeframe == "daily":
         return _daily_bounds(now_et)
@@ -72,7 +69,6 @@ def get_session_window(timeframe, now_et):
         return _weekly_bounds(now_et)
     else:
         return _monthly_bounds(now_et)
-
 
 # ---------- Generic hourly aggregation ----------
 
@@ -88,7 +84,6 @@ def aggregate_hourly(candles, start_ts, end_ts):
         "low": min(c["l"] for c in window),
     }
 
-
 # ---------- Kraken ----------
 
 KRAKEN_INTERVALS = [1, 5, 15, 30, 60, 240, 1440, 10080, 21600]  # minutes; Kraken caps OHLC responses at ~720 candles
@@ -101,7 +96,6 @@ def _pick_kraken_interval(start_ts, end_ts):
         if span_minutes / iv <= 700:
             return iv
     return KRAKEN_INTERVALS[-1]
-
 
 def get_kraken_hourly_range(pair, start_ts, end_ts):
     url = "https://api.kraken.com/0/public/OHLC"
@@ -127,14 +121,12 @@ def get_kraken_hourly_range(pair, start_ts, end_ts):
         since = last_ts
     return out
 
-
 def get_kraken_closed_candle(pair, timeframe, now_et):
-        start_et, end_et = get_session_window(timeframe, now_et)
-        start_ts = int(start_et.astimezone(timezone.utc).timestamp())
-        end_ts = int(end_et.astimezone(timezone.utc).timestamp())
-        candles = get_kraken_hourly_range(pair, start_ts, end_ts)
-        return aggregate_hourly(candles, start_ts, end_ts)
-
+    start_et, end_et = get_session_window(timeframe, now_et)
+    start_ts = int(start_et.astimezone(timezone.utc).timestamp())
+    end_ts = int(end_et.astimezone(timezone.utc).timestamp())
+    candles = get_kraken_hourly_range(pair, start_ts, end_ts)
+    return aggregate_hourly(candles, start_ts, end_ts)
 
 # ---------- GeckoTerminal ----------
 
@@ -147,14 +139,12 @@ def get_gt_hourly_range(network, pool, start_ts, end_ts):
     rows = data.get("data", {}).get("attributes", {}).get("ohlcv_list", [])
     return [{"t": int(row[0]), "o": row[1], "h": row[2], "l": row[3], "c": row[4]} for row in rows]
 
-
 def get_gt_closed_candle(network, pool, timeframe, now_et):
     start_et, end_et = get_session_window(timeframe, now_et)
     start_ts = int(start_et.astimezone(timezone.utc).timestamp())
     end_ts = int(end_et.astimezone(timezone.utc).timestamp())
     candles = get_gt_hourly_range(network, pool, start_ts, end_ts)
     return aggregate_hourly(candles, start_ts, end_ts)
-
 
 # ---------- Hyperliquid ----------
 
@@ -169,14 +159,12 @@ def get_hl_hourly_range(coin, start_ts, end_ts):
     data = r.json()
     return [{"t": int(c["t"]) // 1000, "o": float(c["o"]), "h": float(c["h"]), "l": float(c["l"]), "c": float(c["c"])} for c in data]
 
-
 def get_hl_closed_candle(coin, timeframe, now_et):
     start_et, end_et = get_session_window(timeframe, now_et)
     start_ts = int(start_et.astimezone(timezone.utc).timestamp())
     end_ts = int(end_et.astimezone(timezone.utc).timestamp())
     candles = get_hl_hourly_range(coin, start_ts, end_ts)
     return aggregate_hourly(candles, start_ts, end_ts)
-
 
 # ---------- Pivots / formatting ----------
 # Classic "Floor Trader" pivot formula (the most widely documented and used
@@ -189,7 +177,6 @@ def fmt(price):
     else:
         return f"{price:,.4f}"
 
-
 def calc_pivots(o, h, l, c):
     P = (h + l + c) / 3
     rng = h - l
@@ -200,8 +187,8 @@ def calc_pivots(o, h, l, c):
     S2 = P - rng
     R2 = P + rng
 
-    S3 = S1 - rng   # = L - 2*(H - P), classic Floor formula
-    R3 = R1 + rng   # = H + 2*(P - L), classic Floor formula
+    S3 = S1 - rng  # = L - 2*(H - P), classic Floor formula
+    R3 = R1 + rng  # = H + 2*(P - L), classic Floor formula
 
     S4 = S3 - rng
     R4 = R3 + rng
@@ -221,11 +208,28 @@ def calc_pivots(o, h, l, c):
         ],
     }
 
-
 def send(webhook, msg):
-    resp = requests.post(webhook, json={"content": msg}, timeout=10)
+    """Posts to Discord, retrying automatically if Discord rate-limits us (429)."""
+    for attempt in range(4):
+        resp = requests.post(webhook, json={"content": msg}, timeout=10)
+        if resp.status_code == 429:
+            try:
+                retry_after = float(resp.json().get("retry_after", 1))
+            except Exception:
+                retry_after = 1.0
+            time.sleep(retry_after + 0.25)
+            continue
+        resp.raise_for_status()
+        return
     resp.raise_for_status()
 
+def safe_send(webhook, msg):
+    """Never lets a Discord delivery failure crash the run (which would skip
+    the 'mark as posted' step and cause the same session to repost later)."""
+    try:
+        send(webhook, msg)
+    except Exception as e:
+        print(f"Failed to deliver message to webhook: {e}")
 
 def build_message(label, tf_label, ohlc):
     o, h, l, c = ohlc["open"], ohlc["high"], ohlc["low"], ohlc["close"]
@@ -241,14 +245,12 @@ def build_message(label, tf_label, ohlc):
 
     return "\n".join(lines)
 
-
 def print_session_key(timeframe, now_et):
     """Prints the UTC close-timestamp of the current session for this timeframe.
     Used by the workflow as a cache key so re-runs / delayed duplicate cron
     firings for the SAME closed session don't post twice."""
     _, end_et = get_session_window(timeframe, now_et)
     print(int(end_et.astimezone(timezone.utc).timestamp()))
-
 
 def main():
     if len(sys.argv) < 2:
@@ -272,42 +274,41 @@ def main():
     tf_label = tf_label_map.get(timeframe, timeframe.capitalize())
     header_msg = f"--- {tf_label} Targets | {now} ---"
 
-    send(DISCORD_WEBHOOK_BTC, header_msg)
-    send(DISCORD_WEBHOOK_ALTS, header_msg)
+    safe_send(DISCORD_WEBHOOK_BTC, header_msg)
+    safe_send(DISCORD_WEBHOOK_ALTS, header_msg)
 
     for coin in KRAKEN_COINS:
         try:
             ohlc = get_kraken_closed_candle(coin["pair"], timeframe, now_et)
             if ohlc is None:
-                send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
+                safe_send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
             msg = build_message(coin["label"], tf_label, ohlc)
-            send(coin["webhook"], msg)
+            safe_send(coin["webhook"], msg)
         except Exception as e:
-            send(coin["webhook"], f":x: {coin['label']} error: {e}")
+            safe_send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
     for coin in GT_COINS:
         try:
             ohlc = get_gt_closed_candle(coin["network"], coin["pool"], timeframe, now_et)
             if ohlc is None:
-                send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
+                safe_send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
             msg = build_message(coin["label"], tf_label, ohlc)
-            send(coin["webhook"], msg)
+            safe_send(coin["webhook"], msg)
         except Exception as e:
-            send(coin["webhook"], f":x: {coin['label']} error: {e}")
+            safe_send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
     for coin in HL_COINS:
         try:
             ohlc = get_hl_closed_candle(coin["coin"], timeframe, now_et)
             if ohlc is None:
-                send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
+                safe_send(coin["webhook"], f":warning: {coin['label']}: no candle data returned")
                 continue
             msg = build_message(coin["label"], tf_label, ohlc)
-            send(coin["webhook"], msg)
+            safe_send(coin["webhook"], msg)
         except Exception as e:
-            send(coin["webhook"], f":x: {coin['label']} error: {e}")
-
+            safe_send(coin["webhook"], f":x: {coin['label']} error: {e}")
 
 if __name__ == "__main__":
     main()
