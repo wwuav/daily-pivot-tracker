@@ -19,7 +19,7 @@ on:
     - cron: '*/15 * * * *'
 concurrency:
   group: pivot-targets
-    cancel-in-progress: false
+  cancel-in-progress: false
 jobs:
   daily-pivots:
     if: |
