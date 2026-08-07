@@ -17,6 +17,9 @@ on:
     # makes sure a session only posts once, so new daily/weekly/monthly
     # targets go out within ~15 min of closing.
     - cron: '*/15 * * * *'
+concurrency:
+  group: pivot-targets
+    cancel-in-progress: false
 jobs:
   daily-pivots:
     if: |
